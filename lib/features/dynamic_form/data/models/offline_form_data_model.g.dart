@@ -39,19 +39,3 @@ class OfflineFormDataModelAdapter extends TypeAdapter<OfflineFormDataModel> {
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
-
-// **************************************************************************
-// JsonSerializableGenerator
-// **************************************************************************
-
-_$OfflineFormDataModelImpl _$$OfflineFormDataModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$OfflineFormDataModelImpl(
-      data: json['data'] as Map<String, dynamic>?,
-    );
-
-Map<String, dynamic> _$$OfflineFormDataModelImplToJson(
-        _$OfflineFormDataModelImpl instance) =>
-    <String, dynamic>{
-      'data': instance.data,
-    };

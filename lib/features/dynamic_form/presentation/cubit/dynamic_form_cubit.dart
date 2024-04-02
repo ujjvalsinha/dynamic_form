@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:aws_s3_upload/aws_s3_upload.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
+import 'package:polaris_assignment/core/enum/form_type.dart';
 import 'package:polaris_assignment/core/local_storage/hive/hive_config.dart';
 import 'package:polaris_assignment/features/dynamic_form/data/models/offline_form_data_model.dart';
 import 'package:polaris_assignment/features/dynamic_form/domain/adaptor/adaptor.dart';
@@ -21,8 +21,10 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
   DynamicFormCubit({required this.repository}) : super(DynamicFormLoading()) {
     _init();
     _getFormData();
+    initHive();
   }
 
+  late Box<OfflineFormDataModel> formBox;
   bool isNetConnected = false;
   bool isDataSend = true;
 
@@ -30,6 +32,10 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
 
   List<DynamicFormViewModel> _viewModel = [];
   String _formTitle = '';
+
+  void initHive() async {
+    formBox = Hive.box<OfflineFormDataModel>(HiveConfig.dynamicFormBox);
+  }
 
   void _init() {
     Connectivity()
@@ -65,16 +71,18 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
     ));
   }
 
-  void onFormSubmit(List<File> selectedImages) async {
-    await _uploadImagesToS3(selectedImages);
-    final formBox =
-        await Hive.openBox<OfflineFormDataModel>(HiveConfig.dynamicFormBox);
-    final data = formValue;
+  Future<void> onFormSubmit(List<String> selectedImagesPath) async {
+    // await uploadImagesToS3(selectedImages);
 
-    final currentForms = await _fetchLocalFormData();
-    currentForms.add(OfflineFormDataModel(data: data));
-    await formBox.addAll(currentForms);
-    debugPrint("Saved to Hive!");
+    // final data = formValue;
+
+    // final currentForms = await _fetchLocalFormData();
+    final model = OfflineFormDataModel(data: formValue);
+    var isFormSaved = await formBox.add(model);
+
+    // await formBox.addAll(currentForms);
+    debugPrint("Saved to Hive! : $isFormSaved");
+
     formValue.clear();
     if (isNetConnected) {
       await _sendFormData();
@@ -88,8 +96,37 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
     formValue[key] = values;
   }
 
+  bool validateForm(BuildContext context) {
+    List<String?> mandatoryLabals = _viewModel.map((e) {
+      if (e.mandatory && e.formType != FormType.editText) {
+        return e.label;
+      }
+    }).toList();
+
+    for (var element in mandatoryLabals) {
+      if (element != null) {
+        if (!formValue.containsKey(element)) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("$element is required")));
+          return false;
+        }
+
+        if (formValue.containsKey(element)) {
+          final value = formValue[element];
+          if (value == null) {
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text("$element is required")));
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
+  }
+
   // Upload Images
-  Future<void> _uploadImagesToS3(List<File> images) async {
+  Future<void> uploadImagesToS3(List<File> images) async {
     for (File image in images) {
       final result = await AwsS3.uploadFile(
         accessKey: "AKIARUYJYFCSRJUWGKQY",
@@ -104,8 +141,6 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
   }
 
   Future<void> _sendFormData() async {
-    final formBox =
-        await Hive.openBox<OfflineFormDataModel>(HiveConfig.dynamicFormBox);
     final List<Map<String, dynamic>> data = [];
     //Fetch from local
     final formData = await _fetchLocalFormData();
@@ -125,11 +160,10 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
   Future<List<OfflineFormDataModel>> _fetchLocalFormData() async {
     try {
       /// Get the Hive box
-      final inputFormDataBox =
-          Hive.box<OfflineFormDataModel>(HiveConfig.dynamicFormBox);
+      // final inputFormDataBox =
+      //     Hive.box<OfflineFormDataModel>(HiveConfig.dynamicFormBox);
       // Get the existing list of movies from the box
-      final List<OfflineFormDataModel> inputDatas =
-          inputFormDataBox.values.toList();
+      final inputDatas = formBox.values.toList();
       return inputDatas;
     } catch (e) {
       return [];

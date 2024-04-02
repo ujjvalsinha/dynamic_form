@@ -44,6 +44,7 @@ class _CheckBoxWidgetState extends State<CheckBoxWidget> {
                     } else {
                       selectedOptions.remove(option);
                     }
+
                     // Invoke the callback function whenever the selection changes
                     widget.onSelectionChanged?.call(selectedOptions);
                   });
@@ -54,6 +55,7 @@ class _CheckBoxWidgetState extends State<CheckBoxWidget> {
               "This field is required",
               style: TextStyle(color: Colors.red),
             ),
+          // Add this line to update the corresponding TextField value
         ],
       ),
     );
