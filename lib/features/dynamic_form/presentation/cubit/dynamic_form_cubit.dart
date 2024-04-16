@@ -4,9 +4,11 @@ import 'package:aws_s3_upload/aws_s3_upload.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive/hive.dart';
 import 'package:polaris_assignment/core/enum/form_type.dart';
 import 'package:polaris_assignment/core/local_storage/hive/hive_config.dart';
+import 'package:polaris_assignment/features/dynamic_form/data/models/dynamic_form_model.dart';
 import 'package:polaris_assignment/features/dynamic_form/data/models/offline_form_data_model.dart';
 import 'package:polaris_assignment/features/dynamic_form/domain/adaptor/adaptor.dart';
 import 'package:polaris_assignment/features/dynamic_form/domain/entities/dynamic_form_view_model.dart';
@@ -17,6 +19,8 @@ part 'dynamic_form_state.dart';
 
 class DynamicFormCubit extends Cubit<DynamicFormState> {
   final DynamicFormRepository repository;
+  final Connectivity connectivity = Connectivity();
+  late StreamSubscription<ConnectivityResult> connectivitySubscription;
 
   DynamicFormCubit({required this.repository}) : super(DynamicFormLoading()) {
     _init();
@@ -25,8 +29,7 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
   }
 
   late Box<OfflineFormDataModel> formBox;
-  bool isNetConnected = false;
-  bool isDataSend = true;
+  DynamicFormModel? model;
 
   final Map<String, dynamic> formValue = {};
 
@@ -38,16 +41,14 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
   }
 
   void _init() {
-    Connectivity()
-        .onConnectivityChanged
+    connectivitySubscription = connectivity.onConnectivityChanged
         .listen((ConnectivityResult result) async {
       if (result == ConnectivityResult.mobile ||
           result == ConnectivityResult.wifi) {
-        isNetConnected = true;
-        if (!isDataSend) {
-          await _sendFormData();
-          isDataSend = true;
+        if (model == null) {
+          await _getFormData();
         }
+        await _sendFormData();
       }
     });
   }
@@ -55,41 +56,37 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
   Future<void> _getFormData() async {
     try {
       emit(DynamicFormLoading());
-      final model = await repository.getFormData();
-      _formTitle = model.formName;
-      _viewModel =
-          model.fields.map((e) => Adaptor.convertFromModel(e)).toList();
-    } catch (_) {}
-    _emitState();
+      model = await repository.getFormData();
+
+      _emitState();
+    } catch (e) {
+      throw Exception(e);
+    }
   }
 
-  _emitState() {
-    emit(DynamicFormLoaded(
-      model: _viewModel,
-      formTitle: _formTitle,
-      dateTime: DateTime.now().microsecondsSinceEpoch.toString(),
-    ));
+  _emitState() async {
+    if (model != null) {
+      _formTitle = model!.formName;
+      _viewModel =
+          model!.fields.map((e) => Adaptor.convertFromModel(e)).toList();
+      emit(DynamicFormLoading());
+      await Future.delayed(const Duration(milliseconds: 200));
+      emit(DynamicFormLoaded(
+        model: _viewModel,
+        formTitle: _formTitle,
+        dateTime: DateTime.now().microsecondsSinceEpoch.toString(),
+      ));
+    }
   }
 
   Future<void> onFormSubmit(List<String> selectedImagesPath) async {
-    // await uploadImagesToS3(selectedImages);
-
-    // final data = formValue;
-
-    // final currentForms = await _fetchLocalFormData();
     final model = OfflineFormDataModel(data: {...formValue});
     var isFormSaved = await formBox.add(model);
 
-    // await formBox.addAll(currentForms);
     debugPrint("Saved to Hive! : $isFormSaved");
 
     formValue.clear();
-    if (isNetConnected) {
-      await _sendFormData();
-    } else {
-      isDataSend = false;
-      _emitState();
-    }
+    await _sendFormData();
   }
 
   dataOnChanges(String key, dynamic values) {
@@ -148,25 +145,34 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
       data.add(e.data ?? {});
     }
 
-    final isSend = await repository.sendFormData({'data': data});
-    if (isSend) {
-      formBox.clear();
-      await _getFormData();
+    if (data.isNotEmpty) {
+      final isSend = await repository.sendFormData({'data': data});
+      if (isSend) {
+        Fluttertoast.showToast(msg: "Form Submitted Successfully");
+        formBox.clear();
+        if (formValue.isEmpty) {
+          await _getFormData();
+        }
+      } else {
+        Fluttertoast.showToast(msg: "Form Submitted Successfully");
+        _emitState();
+      }
+      debugPrint("is deta send $isSend");
     }
-
-    debugPrint("is deta send $isSend");
   }
 
   Future<List<OfflineFormDataModel>> _fetchLocalFormData() async {
     try {
-      /// Get the Hive box
-      // final inputFormDataBox =
-      //     Hive.box<OfflineFormDataModel>(HiveConfig.dynamicFormBox);
-      // Get the existing list of movies from the box
       final inputDatas = formBox.values.toList();
       return inputDatas;
     } catch (e) {
       return [];
     }
+  }
+
+  @override
+  Future<void> close() {
+    connectivitySubscription.cancel();
+    return super.close();
   }
 }

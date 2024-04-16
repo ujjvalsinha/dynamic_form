@@ -43,6 +43,8 @@ dependencies:
 
   # AWS S3 upload
   aws_s3_upload: ^1.5.0
+  #Toast
+  fluttertoast: ^8.2.5
 
 dev_dependencies:
   flutter_test:

@@ -44,11 +44,8 @@ class RemoteDataSourceImplementation extends RemoteDataSource {
       } else {
         return false;
       }
-    } on DioException catch (e) {
-      throw PolarisCustomError(
-        code: e.response?.statusCode.toString(),
-        message: "There was an error fetching Form Data",
-      );
+    } on DioException catch (_) {
+      return false;
     }
   }
 }
