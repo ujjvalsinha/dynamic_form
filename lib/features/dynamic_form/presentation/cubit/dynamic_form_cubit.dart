@@ -77,7 +77,7 @@ class DynamicFormCubit extends Cubit<DynamicFormState> {
     // final data = formValue;
 
     // final currentForms = await _fetchLocalFormData();
-    final model = OfflineFormDataModel(data: formValue);
+    final model = OfflineFormDataModel(data: {...formValue});
     var isFormSaved = await formBox.add(model);
 
     // await formBox.addAll(currentForms);
